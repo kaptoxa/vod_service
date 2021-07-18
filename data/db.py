@@ -16,7 +16,7 @@ def global_init():
     if __factory:
         return
 
-    conn_str = f'postgresql+psycopg2://{USER}:{PSWD}@{HOST}/{DB_NAME}'
+    conn_str = f'mysql+pymysql://{USER}:{PSWD}@{HOST}/{DB_NAME}'
     print(f"Подключение к базе данных по адресу {conn_str}")
 
     engine = sa.create_engine(conn_str, echo=False)

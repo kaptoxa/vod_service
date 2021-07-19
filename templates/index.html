@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Video</title>
+</head>
+<body>
+  <video width=screen.availWidth height=screen.availHeight controls="controls" muted autoplay>
+    <source src={{ url_for('static', filename=videoname) }} type="video/mp4">
+    Your browser does not support the video tag.
+  </video>
+</body>
+</html>

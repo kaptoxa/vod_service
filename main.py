@@ -2,12 +2,14 @@ from data import db
 from marshmallow import ValidationError
 
 from config import API_URL, SECRET_KEY
-from flask import Flask, request, jsonify, redirect
+from flask import Flask, request, jsonify, redirect, render_template
 
 from data.__all_models import SchemaShortUrl, SchemaLongUrl, LongUrl, ShortUrl
 
+from requests import get, post
 
-app = Flask(__name__)
+
+app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = SECRET_KEY
 
 
@@ -15,7 +17,7 @@ long_schema = SchemaLongUrl()
 short_schema = SchemaShortUrl(only=('url',))
 
 
-@app.route('/long_to_short/', methods=['POST'])
+@app.route('/create/', methods=['POST'])
 def long_to_short():
     json_data = request.get_json()
     try:
@@ -24,14 +26,12 @@ def long_to_short():
         return jsonify(err.messages), 422
 
     session = db.create_session()
-    long = session.query(LongUrl).filter_by(url=data['url']).first()
-    if long is None:
-        long = LongUrl(url=data['url'])
-        session.add(long)
-        session.commit()
+    long = LongUrl(url=data['url'])
+    session.add(long)
+    session.commit()
 
-        session.add(short_schema.load({'short_link': long.id}))
-        session.commit()
+    session.add(short_schema.load({'short_link': long.id}))
+    session.commit()
 
     return short_schema.dumps(long.short[-1])
 
@@ -42,20 +42,15 @@ def transition(link):
     short = session.query(ShortUrl).filter(ShortUrl.url == link).first()
     if short:
         short.jumps_count += 1
+        if short.jumps_count > 1:
+            session.delete(short.long)
+            session.delete(short)
+            session.commit()
+            return jsonify({'error': f'Sorry. This link is not more existing...'}), 409
         session.commit()
-        return redirect(short.long.url)
+        return render_template('index.html', videoname=f"{short.long.url}.mp4")
     else:
-        return jsonify({'error': f'Sorry. We don not have created \'{link}\' short link.'}), 409
-
-
-@app.route('/statistics/<link>', methods=['GET'])
-def statistics(link):
-    session = db.create_session()
-    short = session.query(ShortUrl).filter(ShortUrl.url == link).first()
-    if short:
-        return short_schema.dumps(short)
-    else:
-        return jsonify({'error': f'Sorry. We don not have created \'{link}\' short link.'}), 409
+        return jsonify({'error': f'Sorry. We do not have created this link.'}), 409
 
 
 def main():
@@ -69,13 +64,12 @@ if __name__ == '__main__':
 
 ### TESTS ###
 
-from requests import get, post
 link = 'null'
 
 def test_create():
     global link
-    params = {"long_url": "http://dirty.ru"}
-    response = post(f'{API_URL}/long_to_short/', json=params)
+    params = {"long_url": "Опять двойка"}
+    response = post(f'{API_URL}/create/', json=params)
     link = response.json()['short_link']
     assert response.status_code == 200 and link != 'null'
 
@@ -86,8 +80,8 @@ def test_transition():
     assert response.status_code == 200
 
 
-def test_stats():
+def test_twice():
     global link
-    response = get(f'{API_URL}/statistics/{link}')
-    assert response.status_code == 200
+    response = get(f'{API_URL}/{link}')
+    assert response.status_code == 409
 
